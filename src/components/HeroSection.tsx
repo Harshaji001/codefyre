@@ -1,8 +1,15 @@
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Play } from "lucide-react";
 import heroBg from "@/assets/hero-bg.jpg";
 
 const HeroSection = () => {
+  const navigate = useNavigate();
+
+  const handleStartProject = () => {
+    navigate("/auth");
+  };
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background Image */}
@@ -50,11 +57,9 @@ const HeroSection = () => {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up"
             style={{ animationDelay: "0.3s" }}
           >
-            <Button variant="hero" size="xl" asChild>
-              <a href="#contact">
-                Get Your Project Started
-                <ArrowRight className="w-5 h-5" />
-              </a>
+            <Button variant="hero" size="xl" onClick={handleStartProject}>
+              Get Your Project Started
+              <ArrowRight className="w-5 h-5" />
             </Button>
             <Button variant="heroOutline" size="xl" asChild>
               <a href="#work">

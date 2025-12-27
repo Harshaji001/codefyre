@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X, Flame } from "lucide-react";
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,6 +23,10 @@ const Navbar = () => {
     { href: "#contact", label: "Contact" },
   ];
 
+  const handleStartProject = () => {
+    navigate("/auth");
+  };
+
   return (
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -32,7 +38,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <a href="#" className="flex items-center gap-2 group">
+          <a href="/" className="flex items-center gap-2 group">
             <div className="relative">
               <Flame className="w-8 h-8 text-primary transition-all group-hover:scale-110" />
               <div className="absolute inset-0 bg-primary/30 blur-xl group-hover:bg-primary/50 transition-all" />
@@ -57,8 +63,8 @@ const Navbar = () => {
 
           {/* CTA Button */}
           <div className="hidden md:block">
-            <Button variant="hero" size="default" asChild>
-              <a href="#contact">Start Your Project</a>
+            <Button variant="hero" size="default" onClick={handleStartProject}>
+              Start Your Project
             </Button>
           </div>
 
@@ -86,8 +92,8 @@ const Navbar = () => {
                   {link.label}
                 </a>
               ))}
-              <Button variant="hero" className="mt-2" asChild>
-                <a href="#contact">Start Your Project</a>
+              <Button variant="hero" className="mt-2" onClick={handleStartProject}>
+                Start Your Project
               </Button>
             </div>
           </div>
