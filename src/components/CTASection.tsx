@@ -1,14 +1,11 @@
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
 
-const CTASection = () => {
-  const navigate = useNavigate();
+interface CTASectionProps {
+  onStartProject?: () => void;
+}
 
-  const handleStartProject = () => {
-    navigate("/auth");
-  };
-
+const CTASection = ({ onStartProject }: CTASectionProps) => {
   return (
     <section id="contact" className="py-24 relative overflow-hidden">
       {/* Background Elements */}
@@ -37,7 +34,7 @@ const CTASection = () => {
           </p>
 
           {/* CTA Button */}
-          <Button variant="hero" size="xl" className="group" onClick={handleStartProject}>
+          <Button variant="hero" size="xl" className="group" onClick={onStartProject}>
             Start Your Project Today
             <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Button>
