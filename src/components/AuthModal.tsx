@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { Mail, ArrowRight, Lock, Eye, EyeOff } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Mail, ArrowRight, Lock, Eye, EyeOff, User } from "lucide-react";
 import { toast } from "sonner";
 
 interface AuthModalProps {
@@ -12,11 +13,12 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-type AuthStep = "initial" | "email" | "password";
+type AuthStep = "initial" | "email" | "username" | "password";
 
 const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const [step, setStep] = useState<AuthStep>("initial");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -42,6 +44,18 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
     setIsTransitioning(true);
     setTimeout(() => {
+      setStep("username");
+      setIsTransitioning(false);
+    }, 500);
+  };
+
+  const handleUsernameNext = () => {
+    if (!username || username.trim().length < 2) {
+      toast.error("Please enter a username (at least 2 characters)");
+      return;
+    }
+    setIsTransitioning(true);
+    setTimeout(() => {
       setStep("password");
       setIsTransitioning(false);
     }, 500);
@@ -55,16 +69,28 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     setIsLoading(true);
     
     // Try sign up first, if user exists try sign in
-    let result = await signUpWithEmail(email, password);
+    let result = await signUpWithEmail(email, password, username);
     if (result.error?.message?.includes("email-already-in-use")) {
       result = await signInWithEmail(email, password);
+    }
+    
+    if (!result.error && result.user) {
+      // Update profile with username
+      try {
+        await supabase
+          .from("profiles")
+          .update({ username: username.trim() })
+          .eq("user_id", result.user.uid);
+      } catch (error) {
+        console.error("Error updating username:", error);
+      }
     }
     
     setIsLoading(false);
     if (result.error) {
       toast.error(result.error.message || "Authentication failed");
     } else {
-      toast.success("Welcome!");
+      toast.success("Welcome to CodeFyre!");
       handleClose();
     }
   };
@@ -72,6 +98,7 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   const handleClose = () => {
     setStep("initial");
     setEmail("");
+    setUsername("");
     setPassword("");
     setIsTransitioning(false);
     onClose();
@@ -83,10 +110,16 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
         <div className="p-6 space-y-6">
           {/* Header */}
           <div className="text-center space-y-2">
-            <h2 className="text-2xl font-bold text-foreground">Start Your Project</h2>
+            <h2 className="text-2xl font-bold text-foreground">
+              {step === "initial" && "Start Your Project"}
+              {step === "email" && "Create Account"}
+              {step === "username" && "Choose Username"}
+              {step === "password" && "Secure Your Account"}
+            </h2>
             <p className="text-muted-foreground text-sm">
               {step === "initial" && "Choose how you'd like to continue"}
-              {step === "email" && "Enter your email to continue"}
+              {step === "email" && "Enter your email to get started"}
+              {step === "username" && "Pick a username to display on your profile"}
               {step === "password" && "Create a secure password"}
             </p>
           </div>
@@ -169,6 +202,40 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
             </div>
           )}
 
+          {/* Username Step */}
+          {step === "username" && (
+            <div
+              className={`space-y-4 ${isTransitioning ? "animate-pixel-dissolve" : "animate-fade-in"}`}
+            >
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-foreground">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="johndoe"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="h-12 bg-background border-border pl-10"
+                    onKeyDown={(e) => e.key === "Enter" && handleUsernameNext()}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">This will be displayed on your profile</p>
+              </div>
+
+              {!isTransitioning && (
+                <Button
+                  onClick={handleUsernameNext}
+                  className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground gap-2"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Password Step */}
           {step === "password" && (
             <div className="space-y-4 animate-fade-in">
@@ -209,7 +276,11 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           {/* Back button for non-initial steps */}
           {step !== "initial" && !isTransitioning && (
             <button
-              onClick={() => setStep(step === "password" ? "email" : "initial")}
+              onClick={() => {
+                if (step === "password") setStep("username");
+                else if (step === "username") setStep("email");
+                else setStep("initial");
+              }}
               className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               ← Back

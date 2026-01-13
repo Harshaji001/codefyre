@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { User } from "firebase/auth";
 import {
   DropdownMenu,
@@ -9,7 +10,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { Mail, Settings, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Mail, Settings, LogOut, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import ContactFormModal from "./ContactFormModal";
 
@@ -18,8 +20,46 @@ interface ProfileDropdownProps {
 }
 
 const ProfileDropdown = ({ user }: ProfileDropdownProps) => {
+  const navigate = useNavigate();
   const { signOut } = useFirebaseAuth();
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user?.uid) return;
+
+      try {
+        const { data } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.uid)
+          .eq("role", "admin")
+          .maybeSingle();
+
+        setIsAdmin(!!data);
+
+        if (data) {
+          // Fetch unread message count for admin
+          const { count } = await supabase
+            .from("contact_messages")
+            .select("*", { count: "exact", head: true })
+            .eq("status", "unread");
+
+          setUnreadCount(count || 0);
+        }
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user?.uid]);
+
+  const handleMessagesClick = () => {
+    navigate("/messages");
+  };
 
   const handleContactUs = () => {
     setIsContactFormOpen(true);
@@ -55,6 +95,11 @@ const ProfileDropdown = ({ user }: ProfileDropdownProps) => {
                 {getInitials()}
               </AvatarFallback>
             </Avatar>
+            {isAdmin && unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-bold text-destructive-foreground">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent 
@@ -71,6 +116,20 @@ const ProfileDropdown = ({ user }: ProfileDropdownProps) => {
             </p>
           </div>
           <DropdownMenuSeparator className="bg-border" />
+          {isAdmin && (
+            <DropdownMenuItem 
+              onClick={handleMessagesClick}
+              className="cursor-pointer text-foreground focus:bg-muted focus:text-foreground"
+            >
+              <Inbox className="mr-2 h-4 w-4" />
+              Messages
+              {unreadCount > 0 && (
+                <span className="ml-auto flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem 
             onClick={handleContactUs}
             className="cursor-pointer text-foreground focus:bg-muted focus:text-foreground"
