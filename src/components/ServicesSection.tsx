@@ -1,4 +1,5 @@
 import { Globe, Smartphone, Settings, Palette, Server, LayoutDashboard } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const services = [
   {
@@ -51,7 +52,11 @@ const services = [
   },
 ];
 
-const ServicesSection = () => {
+const ServiceCard = ({ service, index }: { service: typeof services[0]; index: number }) => {
+  const directions = ["left", "right", "bottom", "top"] as const;
+  const direction = directions[index % 4];
+  const { ref, animationClasses } = useScrollAnimation({ direction, threshold: 0.1 });
+
   const getColorClass = (color: string, type: "bg" | "text" | "border") => {
     const colors = {
       primary: {
@@ -74,10 +79,40 @@ const ServicesSection = () => {
   };
 
   return (
+    <div
+      ref={ref}
+      className={`group p-8 rounded-2xl bg-card border border-border transition-all duration-300 hover:-translate-y-2 ${getColorClass(service.color, "border")} ${animationClasses}`}
+      style={{ transitionDelay: `${index * 100}ms` }}
+    >
+      <div className={`w-16 h-16 rounded-2xl ${getColorClass(service.color, "bg")} flex items-center justify-center mb-6 transition-colors`}>
+        <service.icon className={`w-8 h-8 ${getColorClass(service.color, "text")}`} />
+      </div>
+      <h3 className="text-xl font-bold mb-4 text-foreground">{service.title}</h3>
+      <div className="mb-4">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">The Problem</span>
+        <p className="text-sm text-muted-foreground mt-1">{service.problem}</p>
+      </div>
+      <div className="mb-4">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">Our Solution</span>
+        <p className="text-sm text-foreground/80 mt-1">{service.solution}</p>
+      </div>
+      <div className="pt-4 border-t border-border">
+        <span className={`text-sm font-semibold ${getColorClass(service.color, "text")}`}>
+          → {service.value}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const ServicesSection = () => {
+  const { ref: headerRef, animationClasses: headerClasses } = useScrollAnimation({ direction: "top" });
+
+  return (
     <section id="services" className="py-24 relative">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
+        <div ref={headerRef} className={`text-center max-w-3xl mx-auto mb-16 ${headerClasses}`}>
           <span className="text-primary text-sm font-semibold uppercase tracking-wider">Our Services</span>
           <h2 className="text-3xl md:text-5xl font-bold mt-4 mb-6">
             Everything You Need to{" "}
@@ -92,37 +127,7 @@ const ServicesSection = () => {
         {/* Services Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {services.map((service, index) => (
-            <div
-              key={service.title}
-              className={`group p-8 rounded-2xl bg-card border border-border transition-all duration-300 hover:-translate-y-2 ${getColorClass(service.color, "border")}`}
-            >
-              {/* Icon */}
-              <div className={`w-16 h-16 rounded-2xl ${getColorClass(service.color, "bg")} flex items-center justify-center mb-6 transition-colors`}>
-                <service.icon className={`w-8 h-8 ${getColorClass(service.color, "text")}`} />
-              </div>
-
-              {/* Title */}
-              <h3 className="text-xl font-bold mb-4 text-foreground">{service.title}</h3>
-
-              {/* Problem */}
-              <div className="mb-4">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">The Problem</span>
-                <p className="text-sm text-muted-foreground mt-1">{service.problem}</p>
-              </div>
-
-              {/* Solution */}
-              <div className="mb-4">
-                <span className="text-xs uppercase tracking-wider text-muted-foreground">Our Solution</span>
-                <p className="text-sm text-foreground/80 mt-1">{service.solution}</p>
-              </div>
-
-              {/* Value */}
-              <div className="pt-4 border-t border-border">
-                <span className={`text-sm font-semibold ${getColorClass(service.color, "text")}`}>
-                  → {service.value}
-                </span>
-              </div>
-            </div>
+            <ServiceCard key={service.title} service={service} index={index} />
           ))}
         </div>
       </div>

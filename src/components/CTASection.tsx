@@ -1,11 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Sparkles } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 interface CTASectionProps {
   onStartProject?: () => void;
 }
 
 const CTASection = ({ onStartProject }: CTASectionProps) => {
+  const { ref, animationClasses } = useScrollAnimation({ direction: "bottom", threshold: 0.2 });
+
   return (
     <section id="contact" className="py-24 relative overflow-hidden">
       {/* Background Elements */}
@@ -15,7 +18,7 @@ const CTASection = ({ onStartProject }: CTASectionProps) => {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/10 rounded-full blur-3xl" />
 
       <div className="container mx-auto px-4 relative z-10">
-        <div className="max-w-4xl mx-auto text-center">
+        <div ref={ref} className={`max-w-4xl mx-auto text-center ${animationClasses}`}>
           {/* Icon */}
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 mb-8 animate-float">
             <Sparkles className="w-10 h-10 text-primary" />

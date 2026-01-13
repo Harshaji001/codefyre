@@ -1,4 +1,5 @@
 import { Sparkles, MessageSquare, TrendingUp, HeartHandshake } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const reasons = [
   {
@@ -27,7 +28,35 @@ const reasons = [
   },
 ];
 
+const ReasonCard = ({ reason, index }: { reason: typeof reasons[0]; index: number }) => {
+  const { ref, animationClasses } = useScrollAnimation({ direction: "right", threshold: 0.1 });
+
+  return (
+    <div
+      ref={ref}
+      className={`group flex gap-5 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 ${animationClasses}`}
+      style={{ transitionDelay: `${index * 150}ms` }}
+    >
+      <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+        <reason.icon className="w-7 h-7 text-primary" />
+      </div>
+      <div>
+        <div className="flex items-center gap-3 mb-2">
+          <h3 className="text-lg font-semibold text-foreground">{reason.title}</h3>
+          <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary font-medium">
+            {reason.highlight}
+          </span>
+        </div>
+        <p className="text-muted-foreground text-sm leading-relaxed">{reason.description}</p>
+      </div>
+    </div>
+  );
+};
+
 const WhyChooseSection = () => {
+  const { ref: leftRef, animationClasses: leftClasses } = useScrollAnimation({ direction: "left" });
+  const { ref: statsRef, animationClasses: statsClasses } = useScrollAnimation({ direction: "bottom" });
+
   return (
     <section className="py-24 relative overflow-hidden">
       {/* Background */}
@@ -38,7 +67,7 @@ const WhyChooseSection = () => {
       <div className="container mx-auto px-4 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left Content */}
-          <div>
+          <div ref={leftRef} className={leftClasses}>
             <span className="text-primary text-sm font-semibold uppercase tracking-wider">Why Choose Us</span>
             <h2 className="text-3xl md:text-5xl font-bold mt-4 mb-6">
               We're Not Your Average{" "}
@@ -50,7 +79,7 @@ const WhyChooseSection = () => {
             </p>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-6">
+            <div ref={statsRef} className={`grid grid-cols-3 gap-6 ${statsClasses}`}>
               <div className="text-center p-4 rounded-xl bg-card border border-border">
                 <div className="text-3xl font-bold text-primary">3+</div>
                 <div className="text-xs text-muted-foreground mt-1">Years Experience</div>
@@ -69,23 +98,7 @@ const WhyChooseSection = () => {
           {/* Right Content - Reasons */}
           <div className="space-y-6">
             {reasons.map((reason, index) => (
-              <div
-                key={reason.title}
-                className="group flex gap-5 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300"
-              >
-                <div className="flex-shrink-0 w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                  <reason.icon className="w-7 h-7 text-primary" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-foreground">{reason.title}</h3>
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-primary/10 text-primary font-medium">
-                      {reason.highlight}
-                    </span>
-                  </div>
-                  <p className="text-muted-foreground text-sm leading-relaxed">{reason.description}</p>
-                </div>
-              </div>
+              <ReasonCard key={reason.title} reason={reason} index={index} />
             ))}
           </div>
         </div>
