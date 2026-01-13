@@ -1,4 +1,5 @@
 import { Search, FileText, Paintbrush, TestTube, Rocket } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const steps = [
   {
@@ -38,12 +39,60 @@ const steps = [
   },
 ];
 
+const ProcessStep = ({ step, index }: { step: typeof steps[0]; index: number }) => {
+  const direction = index % 2 === 0 ? "left" : "right";
+  const { ref, animationClasses } = useScrollAnimation({ direction, threshold: 0.2 });
+
+  return (
+    <div
+      ref={ref}
+      className={`flex flex-col lg:flex-row gap-8 items-center ${
+        index % 2 === 1 ? "lg:flex-row-reverse" : ""
+      } ${animationClasses}`}
+    >
+      {/* Content Card */}
+      <div className={`flex-1 ${index % 2 === 1 ? "lg:text-right" : ""}`}>
+        <div className="p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300">
+          <div className={`flex items-center gap-4 mb-4 ${index % 2 === 1 ? "lg:flex-row-reverse" : ""}`}>
+            <span className="text-5xl font-bold text-muted/50">{step.number}</span>
+            <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
+              <step.icon className="w-7 h-7 text-primary" />
+            </div>
+          </div>
+          <h3 className="text-2xl font-bold mb-3 text-foreground">{step.title}</h3>
+          <p className="text-muted-foreground mb-4">{step.description}</p>
+          <div className={`flex flex-wrap gap-2 ${index % 2 === 1 ? "lg:justify-end" : ""}`}>
+            {step.deliverables.map((deliverable) => (
+              <span
+                key={deliverable}
+                className="px-3 py-1 text-xs rounded-full bg-muted text-muted-foreground"
+              >
+                {deliverable}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Center Node */}
+      <div className="hidden lg:flex w-16 h-16 rounded-full bg-card border-4 border-primary items-center justify-center z-10">
+        <step.icon className="w-6 h-6 text-primary" />
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1 hidden lg:block" />
+    </div>
+  );
+};
+
 const ProcessSection = () => {
+  const { ref: headerRef, animationClasses: headerClasses } = useScrollAnimation({ direction: "top" });
+
   return (
     <section id="process" className="py-24 relative">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
+        <div ref={headerRef} className={`text-center max-w-3xl mx-auto mb-16 ${headerClasses}`}>
           <span className="text-primary text-sm font-semibold uppercase tracking-wider">Our Process</span>
           <h2 className="text-3xl md:text-5xl font-bold mt-4 mb-6">
             From Idea to Impact in{" "}
@@ -62,44 +111,7 @@ const ProcessSection = () => {
 
           <div className="space-y-12">
             {steps.map((step, index) => (
-              <div
-                key={step.number}
-                className={`flex flex-col lg:flex-row gap-8 items-center ${
-                  index % 2 === 1 ? "lg:flex-row-reverse" : ""
-                }`}
-              >
-                {/* Content Card */}
-                <div className={`flex-1 ${index % 2 === 1 ? "lg:text-right" : ""}`}>
-                  <div className="p-8 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300">
-                    <div className={`flex items-center gap-4 mb-4 ${index % 2 === 1 ? "lg:flex-row-reverse" : ""}`}>
-                      <span className="text-5xl font-bold text-muted/50">{step.number}</span>
-                      <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <step.icon className="w-7 h-7 text-primary" />
-                      </div>
-                    </div>
-                    <h3 className="text-2xl font-bold mb-3 text-foreground">{step.title}</h3>
-                    <p className="text-muted-foreground mb-4">{step.description}</p>
-                    <div className={`flex flex-wrap gap-2 ${index % 2 === 1 ? "lg:justify-end" : ""}`}>
-                      {step.deliverables.map((deliverable) => (
-                        <span
-                          key={deliverable}
-                          className="px-3 py-1 text-xs rounded-full bg-muted text-muted-foreground"
-                        >
-                          {deliverable}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Center Node */}
-                <div className="hidden lg:flex w-16 h-16 rounded-full bg-card border-4 border-primary items-center justify-center z-10">
-                  <step.icon className="w-6 h-6 text-primary" />
-                </div>
-
-                {/* Spacer */}
-                <div className="flex-1 hidden lg:block" />
-              </div>
+              <ProcessStep key={step.number} step={step} index={index} />
             ))}
           </div>
         </div>

@@ -30,6 +30,10 @@ const Navbar = () => {
     setIsAuthModalOpen(true);
   };
 
+  const handleSignIn = () => {
+    setIsAuthModalOpen(true);
+  };
+
   return (
     <>
       <nav
@@ -66,15 +70,20 @@ const Navbar = () => {
             </div>
 
             {/* CTA Button or Profile */}
-            <div className="hidden md:block">
+            <div className="hidden md:flex items-center gap-3">
               {loading ? (
                 <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
               ) : user ? (
                 <ProfileDropdown user={user} />
               ) : (
-                <Button variant="hero" size="default" onClick={handleStartProject}>
-                  Start Your Project
-                </Button>
+                <>
+                  <Button variant="ghost" onClick={handleSignIn}>
+                    Sign In
+                  </Button>
+                  <Button variant="hero" size="default" onClick={handleStartProject}>
+                    Start Your Project
+                  </Button>
+                </>
               )}
             </div>
 
@@ -110,9 +119,14 @@ const Navbar = () => {
                     <span className="text-sm text-muted-foreground">{user.displayName || user.email}</span>
                   </div>
                 ) : (
-                  <Button variant="hero" className="mt-2" onClick={handleStartProject}>
-                    Start Your Project
-                  </Button>
+                  <div className="flex flex-col gap-2 mt-2">
+                    <Button variant="ghost" onClick={handleSignIn}>
+                      Sign In
+                    </Button>
+                    <Button variant="hero" onClick={handleStartProject}>
+                      Start Your Project
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>

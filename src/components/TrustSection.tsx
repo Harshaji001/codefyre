@@ -1,4 +1,5 @@
 import { Shield, Zap, Code2, Lock } from "lucide-react";
+import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
 const trustPoints = [
   {
@@ -23,7 +24,28 @@ const trustPoints = [
   },
 ];
 
+const TrustCard = ({ point, index }: { point: typeof trustPoints[0]; index: number }) => {
+  const directions = ["left", "bottom", "bottom", "right"] as const;
+  const { ref, animationClasses } = useScrollAnimation({ direction: directions[index], threshold: 0.1 });
+
+  return (
+    <div
+      ref={ref}
+      className={`group p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:-translate-y-1 ${animationClasses}`}
+      style={{ transitionDelay: `${index * 100}ms` }}
+    >
+      <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
+        <point.icon className="w-7 h-7 text-primary" />
+      </div>
+      <h3 className="text-lg font-semibold mb-3 text-foreground">{point.title}</h3>
+      <p className="text-muted-foreground text-sm leading-relaxed">{point.description}</p>
+    </div>
+  );
+};
+
 const TrustSection = () => {
+  const { ref: headerRef, animationClasses: headerClasses } = useScrollAnimation({ direction: "top" });
+
   return (
     <section className="py-24 relative overflow-hidden">
       {/* Background Elements */}
@@ -32,7 +54,7 @@ const TrustSection = () => {
 
       <div className="container mx-auto px-4 relative z-10">
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-16">
+        <div ref={headerRef} className={`text-center max-w-3xl mx-auto mb-16 ${headerClasses}`}>
           <span className="text-primary text-sm font-semibold uppercase tracking-wider">Why Trust Us</span>
           <h2 className="text-3xl md:text-5xl font-bold mt-4 mb-6">
             Built on a Foundation of{" "}
@@ -47,17 +69,7 @@ const TrustSection = () => {
         {/* Trust Points Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
           {trustPoints.map((point, index) => (
-            <div
-              key={point.title}
-              className="group p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all duration-300 hover:-translate-y-1"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/20 transition-colors">
-                <point.icon className="w-7 h-7 text-primary" />
-              </div>
-              <h3 className="text-lg font-semibold mb-3 text-foreground">{point.title}</h3>
-              <p className="text-muted-foreground text-sm leading-relaxed">{point.description}</p>
-            </div>
+            <TrustCard key={point.title} point={point} index={index} />
           ))}
         </div>
       </div>
