@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
@@ -8,8 +9,15 @@ import ProcessSection from "@/components/ProcessSection";
 import ProjectsSection from "@/components/ProjectsSection";
 import CTASection from "@/components/CTASection";
 import Footer from "@/components/Footer";
+import AuthModal from "@/components/AuthModal";
 
 const Index = () => {
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  const handleStartProject = () => {
+    setIsAuthModalOpen(true);
+  };
+
   return (
     <>
       <Helmet>
@@ -33,15 +41,17 @@ const Index = () => {
 
       <main className="min-h-screen bg-background">
         <Navbar />
-        <HeroSection />
+        <HeroSection onStartProject={handleStartProject} />
         <TrustSection />
         <ServicesSection />
         <WhyChooseSection />
         <ProcessSection />
         <ProjectsSection />
-        <CTASection />
+        <CTASection onStartProject={handleStartProject} />
         <Footer />
       </main>
+
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </>
   );
 };
