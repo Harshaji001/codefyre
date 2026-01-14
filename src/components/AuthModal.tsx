@@ -3,9 +3,10 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, ArrowRight, Lock, Eye, EyeOff, User } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, User, LogIn, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 interface AuthModalProps {
@@ -13,15 +14,21 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
-type AuthStep = "initial" | "email" | "username" | "password";
-
 const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
-  const [step, setStep] = useState<AuthStep>("initial");
-  const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [activeTab, setActiveTab] = useState<"signin" | "signup">("signin");
+  
+  // Sign In state
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
+  
+  // Sign Up state
+  const [signUpEmail, setSignUpEmail] = useState("");
+  const [signUpUsername, setSignUpUsername] = useState("");
+  const [signUpPassword, setSignUpPassword] = useState("");
+  const [signUpConfirmPassword, setSignUpConfirmPassword] = useState("");
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
+  
   const [isLoading, setIsLoading] = useState(false);
   const { signInWithGoogle, signUpWithEmail, signInWithEmail } = useFirebaseAuth();
 
@@ -37,58 +44,81 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
     }
   };
 
-  const handleEmailNext = () => {
-    if (!email || !email.includes("@")) {
+  const handleSignIn = async () => {
+    if (!signInEmail || !signInEmail.includes("@")) {
       toast.error("Please enter a valid email");
       return;
     }
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setStep("username");
-      setIsTransitioning(false);
-    }, 500);
-  };
-
-  const handleUsernameNext = () => {
-    if (!username || username.trim().length < 2) {
-      toast.error("Please enter a username (at least 2 characters)");
-      return;
-    }
-    setIsTransitioning(true);
-    setTimeout(() => {
-      setStep("password");
-      setIsTransitioning(false);
-    }, 500);
-  };
-
-  const handleCreateAccount = async () => {
-    if (!password || password.length < 6) {
+    if (!signInPassword || signInPassword.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
     }
+
     setIsLoading(true);
-    
-    // Try sign up first, if user exists try sign in
-    let result = await signUpWithEmail(email, password, username);
-    if (result.error?.message?.includes("email-already-in-use")) {
-      result = await signInWithEmail(email, password);
+    const result = await signInWithEmail(signInEmail, signInPassword);
+    setIsLoading(false);
+
+    if (result.error) {
+      if (result.error.message?.includes("user-not-found")) {
+        toast.error("No account found with this email. Please sign up first.");
+      } else if (result.error.message?.includes("wrong-password")) {
+        toast.error("Incorrect password. Please try again.");
+      } else {
+        toast.error(result.error.message || "Sign in failed");
+      }
+    } else {
+      toast.success("Welcome back!");
+      handleClose();
     }
+  };
+
+  const handleSignUp = async () => {
+    if (!signUpEmail || !signUpEmail.includes("@")) {
+      toast.error("Please enter a valid email");
+      return;
+    }
+    if (!signUpUsername || signUpUsername.trim().length < 2) {
+      toast.error("Username must be at least 2 characters");
+      return;
+    }
+    if (!signUpPassword || signUpPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (signUpPassword !== signUpConfirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
+    setIsLoading(true);
+    const result = await signUpWithEmail(signUpEmail, signUpPassword, signUpUsername);
     
     if (!result.error && result.user) {
-      // Update profile with username
+      // Create profile in Supabase
       try {
         await supabase
           .from("profiles")
-          .update({ username: username.trim() })
-          .eq("user_id", result.user.uid);
+          .upsert({ 
+            user_id: result.user.uid,
+            email: signUpEmail,
+            username: signUpUsername.trim(),
+            full_name: signUpUsername.trim()
+          }, { onConflict: 'user_id' });
       } catch (error) {
-        console.error("Error updating username:", error);
+        console.error("Error creating profile:", error);
       }
     }
     
     setIsLoading(false);
+
     if (result.error) {
-      toast.error(result.error.message || "Authentication failed");
+      if (result.error.message?.includes("email-already-in-use")) {
+        toast.error("This email is already registered. Please sign in instead.");
+        setActiveTab("signin");
+        setSignInEmail(signUpEmail);
+      } else {
+        toast.error(result.error.message || "Sign up failed");
+      }
     } else {
       toast.success("Welcome to CodeFyre!");
       handleClose();
@@ -96,11 +126,15 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
   };
 
   const handleClose = () => {
-    setStep("initial");
-    setEmail("");
-    setUsername("");
-    setPassword("");
-    setIsTransitioning(false);
+    setSignInEmail("");
+    setSignInPassword("");
+    setSignUpEmail("");
+    setSignUpUsername("");
+    setSignUpPassword("");
+    setSignUpConfirmPassword("");
+    setShowSignInPassword(false);
+    setShowSignUpPassword(false);
+    setActiveTab("signin");
     onClose();
   };
 
@@ -111,181 +145,190 @@ const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
           {/* Header */}
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-bold text-foreground">
-              {step === "initial" && "Start Your Project"}
-              {step === "email" && "Create Account"}
-              {step === "username" && "Choose Username"}
-              {step === "password" && "Secure Your Account"}
+              Welcome to CodeFyre
             </h2>
             <p className="text-muted-foreground text-sm">
-              {step === "initial" && "Choose how you'd like to continue"}
-              {step === "email" && "Enter your email to get started"}
-              {step === "username" && "Pick a username to display on your profile"}
-              {step === "password" && "Create a secure password"}
+              Sign in to your account or create a new one
             </p>
           </div>
 
-          {/* Initial Step */}
-          {step === "initial" && (
-            <div className="space-y-4 animate-fade-in">
-              <Button
-                onClick={handleGoogleSignIn}
-                disabled={isLoading}
-                className="w-full h-12 bg-background hover:bg-muted border border-border text-foreground gap-3"
-              >
-                <svg className="w-5 h-5" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  />
-                </svg>
-                Continue with Google
-              </Button>
+          {/* Google Sign In */}
+          <Button
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full h-12 bg-background hover:bg-muted border border-border text-foreground gap-3"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="currentColor"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="currentColor"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Continue with Google
+          </Button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">or</span>
-                </div>
-              </div>
-
-              <Button
-                onClick={() => setStep("email")}
-                className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground gap-3"
-              >
-                <Mail className="w-5 h-5" />
-                Enter Email
-              </Button>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-border" />
             </div>
-          )}
-
-          {/* Email Step */}
-          {step === "email" && (
-            <div 
-              className={`space-y-4 ${isTransitioning ? "animate-pixel-dissolve" : "animate-fade-in"}`}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 bg-background border-border"
-                  onKeyDown={(e) => e.key === "Enter" && handleEmailNext()}
-                />
-              </div>
-              
-              {!isTransitioning && (
-                <Button
-                  onClick={handleEmailNext}
-                  className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground gap-2"
-                >
-                  Next
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              )}
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or continue with email</span>
             </div>
-          )}
+          </div>
 
-          {/* Username Step */}
-          {step === "username" && (
-            <div
-              className={`space-y-4 ${isTransitioning ? "animate-pixel-dissolve" : "animate-fade-in"}`}
-            >
+          {/* Tabs for Sign In / Sign Up */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "signin" | "signup")}>
+            <TabsList className="grid w-full grid-cols-2 bg-muted/50">
+              <TabsTrigger value="signin" className="gap-2">
+                <LogIn className="w-4 h-4" />
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger value="signup" className="gap-2">
+                <UserPlus className="w-4 h-4" />
+                Sign Up
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Sign In Tab */}
+            <TabsContent value="signin" className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="username" className="text-foreground">Username</Label>
+                <Label htmlFor="signin-email" className="text-foreground">Email</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    id="username"
-                    type="text"
-                    placeholder="johndoe"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    id="signin-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={signInEmail}
+                    onChange={(e) => setSignInEmail(e.target.value)}
                     className="h-12 bg-background border-border pl-10"
-                    onKeyDown={(e) => e.key === "Enter" && handleUsernameNext()}
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">This will be displayed on your profile</p>
               </div>
 
-              {!isTransitioning && (
-                <Button
-                  onClick={handleUsernameNext}
-                  className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground gap-2"
-                >
-                  Next
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          )}
-
-          {/* Password Step */}
-          {step === "password" && (
-            <div className="space-y-4 animate-fade-in">
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-foreground">Create Password</Label>
+                <Label htmlFor="signin-password" className="text-foreground">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
+                    id="signin-password"
+                    type={showSignInPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    value={signInPassword}
+                    onChange={(e) => setSignInPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSignIn()}
                     className="h-12 bg-background border-border pl-10 pr-10"
-                    onKeyDown={(e) => e.key === "Enter" && handleCreateAccount()}
                   />
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
+                    onClick={() => setShowSignInPassword(!showSignInPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showSignInPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <p className="text-xs text-muted-foreground">Must be at least 6 characters</p>
               </div>
-              
+
               <Button
-                onClick={handleCreateAccount}
+                onClick={handleSignIn}
                 disabled={isLoading}
                 className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground"
               >
-                {isLoading ? "Creating Account..." : "Create Account"}
+                {isLoading ? "Signing in..." : "Sign In"}
               </Button>
-            </div>
-          )}
+            </TabsContent>
 
-          {/* Back button for non-initial steps */}
-          {step !== "initial" && !isTransitioning && (
-            <button
-              onClick={() => {
-                if (step === "password") setStep("username");
-                else if (step === "username") setStep("email");
-                else setStep("initial");
-              }}
-              className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ← Back
-            </button>
-          )}
+            {/* Sign Up Tab */}
+            <TabsContent value="signup" className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="signup-email" className="text-foreground">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={signUpEmail}
+                    onChange={(e) => setSignUpEmail(e.target.value)}
+                    className="h-12 bg-background border-border pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-username" className="text-foreground">Username</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="signup-username"
+                    type="text"
+                    placeholder="johndoe"
+                    value={signUpUsername}
+                    onChange={(e) => setSignUpUsername(e.target.value)}
+                    className="h-12 bg-background border-border pl-10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-password" className="text-foreground">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="signup-password"
+                    type={showSignUpPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={signUpPassword}
+                    onChange={(e) => setSignUpPassword(e.target.value)}
+                    className="h-12 bg-background border-border pl-10 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showSignUpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="signup-confirm" className="text-foreground">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="signup-confirm"
+                    type={showSignUpPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    value={signUpConfirmPassword}
+                    onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleSignUp()}
+                    className="h-12 bg-background border-border pl-10"
+                  />
+                </div>
+              </div>
+
+              <Button
+                onClick={handleSignUp}
+                disabled={isLoading}
+                className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground"
+              >
+                {isLoading ? "Creating account..." : "Create Account"}
+              </Button>
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>

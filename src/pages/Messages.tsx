@@ -1,32 +1,56 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { ArrowLeft, Mail, MailOpen, Clock, User } from "lucide-react";
+import { 
+  subscribeToChats, 
+  subscribeToMessages, 
+  sendMessage, 
+  createChat,
+  markMessagesAsRead 
+} from "@/lib/firebase";
+import { ArrowLeft, Send, Plus, MessageCircle, Clock, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
-interface ContactMessage {
+interface Chat {
   id: string;
-  sender_id: string;
-  sender_email: string;
-  sender_name: string | null;
-  subject: string;
+  createdBy: string;
+  createdByEmail: string;
+  createdByName: string;
+  participants: Record<string, boolean>;
+  metadata?: {
+    lastMessage: string;
+    lastMessageTime: number;
+    lastSenderId: string;
+  };
+}
+
+interface Message {
+  id: string;
+  senderId: string;
+  senderName: string;
   message: string;
-  status: string;
-  created_at: string;
+  timestamp: number;
+  read: boolean;
 }
 
 const Messages = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useFirebaseAuth();
-  const [messages, setMessages] = useState<ContactMessage[]>([]);
-  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -34,59 +58,105 @@ const Messages = () => {
     }
   }, [user, authLoading, navigate]);
 
+  // Check admin status
   useEffect(() => {
-    const checkAdminAndFetchMessages = async () => {
+    const checkAdmin = async () => {
       if (!user) return;
+      
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.uid)
+        .eq("role", "admin")
+        .maybeSingle();
 
-      try {
-        // Check if user is admin
-        const { data: roleData } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.uid)
-          .eq("role", "admin")
-          .maybeSingle();
-
-        const userIsAdmin = !!roleData;
-        setIsAdmin(userIsAdmin);
-
-        // Fetch messages
-        const { data: messagesData, error } = await supabase
-          .from("contact_messages")
-          .select("*")
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          console.error("Error fetching messages:", error);
-        } else {
-          setMessages(messagesData || []);
-        }
-      } catch (error) {
-        console.error("Error:", error);
-      } finally {
-        setLoading(false);
-      }
+      setIsAdmin(!!roleData);
+      setLoading(false);
     };
 
     if (user) {
-      checkAdminAndFetchMessages();
+      checkAdmin();
     }
   }, [user]);
 
-  const handleSelectMessage = async (message: ContactMessage) => {
-    setSelectedMessage(message);
+  // Subscribe to chats
+  useEffect(() => {
+    if (!user || loading) return;
 
-    // Mark as read if admin and unread
-    if (isAdmin && message.status === "unread") {
-      await supabase
-        .from("contact_messages")
-        .update({ status: "read" })
-        .eq("id", message.id);
+    const unsubscribe = subscribeToChats(user.uid, isAdmin, (chatList) => {
+      setChats(chatList);
+    });
 
-      setMessages((prev) =>
-        prev.map((m) => (m.id === message.id ? { ...m, status: "read" } : m))
-      );
+    return unsubscribe;
+  }, [user, isAdmin, loading]);
+
+  // Subscribe to messages for selected chat
+  useEffect(() => {
+    if (!selectedChat) {
+      setMessages([]);
+      return;
     }
+
+    const unsubscribe = subscribeToMessages(selectedChat.id, (messageList) => {
+      setMessages(messageList);
+    });
+
+    // Mark messages as read
+    if (user) {
+      markMessagesAsRead(selectedChat.id, user.uid);
+    }
+
+    return unsubscribe;
+  }, [selectedChat, user]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleCreateChat = async () => {
+    if (!user) return;
+
+    try {
+      const chatId = await createChat(
+        user.uid,
+        user.email || "",
+        user.displayName || "User"
+      );
+      
+      if (chatId) {
+        toast.success("Chat created! Start messaging.");
+      }
+    } catch (error) {
+      console.error("Error creating chat:", error);
+      toast.error("Failed to create chat");
+    }
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChat || !user) return;
+
+    setSending(true);
+    try {
+      await sendMessage(
+        selectedChat.id,
+        user.uid,
+        user.displayName || user.email || "User",
+        newMessage.trim()
+      );
+      setNewMessage("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+      toast.error("Failed to send message");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const getUnreadCount = (chat: Chat): number => {
+    if (!user) return 0;
+    // This would need real-time tracking, simplified for now
+    return 0;
   };
 
   if (authLoading || loading) {
@@ -120,7 +190,7 @@ const Messages = () => {
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <h1 className="text-xl font-bold text-foreground">
-              {isAdmin ? "All Messages" : "My Messages"}
+              {isAdmin ? "All Chats" : "My Messages"}
             </h1>
             {isAdmin && (
               <Badge variant="outline" className="ml-2 border-primary text-primary">
@@ -133,70 +203,75 @@ const Messages = () => {
         {/* Main Content */}
         <div className="container mx-auto px-4 py-6">
           <div className="grid md:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
-            {/* Messages List */}
-            <div className="md:col-span-1 border border-border rounded-lg bg-card overflow-hidden">
-              <div className="p-4 border-b border-border">
-                <h2 className="font-semibold text-foreground">Inbox</h2>
-                <p className="text-sm text-muted-foreground">
-                  {messages.length} message{messages.length !== 1 ? "s" : ""}
-                </p>
+            {/* Chats List */}
+            <div className="md:col-span-1 border border-border rounded-lg bg-card overflow-hidden flex flex-col">
+              <div className="p-4 border-b border-border flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-foreground">Conversations</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {chats.length} chat{chats.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                {!isAdmin && (
+                  <Button
+                    size="sm"
+                    onClick={handleCreateChat}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    New Chat
+                  </Button>
+                )}
               </div>
-              <ScrollArea className="h-[calc(100%-80px)]">
-                {messages.length === 0 ? (
+              <ScrollArea className="flex-1">
+                {chats.length === 0 ? (
                   <div className="p-6 text-center text-muted-foreground">
-                    <Mail className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                    <p>No messages yet</p>
+                    <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p>No conversations yet</p>
+                    {!isAdmin && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCreateChat}
+                        className="mt-3"
+                      >
+                        Start a conversation
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="divide-y divide-border">
-                    {messages.map((message) => (
+                    {chats.map((chat) => (
                       <button
-                        key={message.id}
-                        onClick={() => handleSelectMessage(message)}
+                        key={chat.id}
+                        onClick={() => setSelectedChat(chat)}
                         className={`w-full p-4 text-left transition-colors hover:bg-muted/50 ${
-                          selectedMessage?.id === message.id
+                          selectedChat?.id === chat.id
                             ? "bg-primary/10 border-l-2 border-l-primary"
                             : ""
                         }`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-1">
-                            {message.status === "unread" ? (
-                              <Mail className="w-4 h-4 text-primary" />
-                            ) : (
-                              <MailOpen className="w-4 h-4 text-muted-foreground" />
-                            )}
+                          <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                            <User className="w-5 h-5 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <span
-                                className={`text-sm truncate ${
-                                  message.status === "unread"
-                                    ? "font-semibold text-foreground"
-                                    : "text-muted-foreground"
-                                }`}
-                              >
-                                {message.sender_name || message.sender_email}
+                              <span className="text-sm font-medium text-foreground truncate">
+                                {isAdmin 
+                                  ? chat.createdByName || chat.createdByEmail 
+                                  : "Support Team"}
                               </span>
-                              {message.status === "unread" && (
-                                <Badge className="bg-primary text-primary-foreground text-xs">
-                                  New
-                                </Badge>
-                              )}
                             </div>
-                            <p
-                              className={`text-sm truncate ${
-                                message.status === "unread"
-                                  ? "font-medium text-foreground"
-                                  : "text-muted-foreground"
-                              }`}
-                            >
-                              {message.subject}
+                            <p className="text-sm text-muted-foreground truncate">
+                              {chat.metadata?.lastMessage || "No messages yet"}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {format(new Date(message.created_at), "MMM d, h:mm a")}
-                            </p>
+                            {chat.metadata?.lastMessageTime && (
+                              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {format(new Date(chat.metadata.lastMessageTime), "MMM d, h:mm a")}
+                              </p>
+                            )}
                           </div>
                         </div>
                       </button>
@@ -206,44 +281,103 @@ const Messages = () => {
               </ScrollArea>
             </div>
 
-            {/* Message Detail */}
-            <div className="md:col-span-2 border border-border rounded-lg bg-card overflow-hidden">
-              {selectedMessage ? (
-                <div className="h-full flex flex-col">
-                  <div className="p-6 border-b border-border">
-                    <h2 className="text-xl font-semibold text-foreground mb-2">
-                      {selectedMessage.subject}
-                    </h2>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        <span>
-                          {selectedMessage.sender_name || "Unknown"} (
-                          {selectedMessage.sender_email})
-                        </span>
+            {/* Chat Messages */}
+            <div className="md:col-span-2 border border-border rounded-lg bg-card overflow-hidden flex flex-col">
+              {selectedChat ? (
+                <>
+                  {/* Chat Header */}
+                  <div className="p-4 border-b border-border">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                        <User className="w-5 h-5 text-primary" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4" />
-                        <span>
-                          {format(
-                            new Date(selectedMessage.created_at),
-                            "MMMM d, yyyy 'at' h:mm a"
-                          )}
-                        </span>
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          {isAdmin 
+                            ? selectedChat.createdByName || selectedChat.createdByEmail 
+                            : "Support Team"}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          {isAdmin ? selectedChat.createdByEmail : "We typically reply within a few hours"}
+                        </p>
                       </div>
                     </div>
                   </div>
-                  <ScrollArea className="flex-1 p-6">
-                    <p className="text-foreground whitespace-pre-wrap leading-relaxed">
-                      {selectedMessage.message}
-                    </p>
+
+                  {/* Messages */}
+                  <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-4">
+                      {messages.length === 0 ? (
+                        <div className="text-center text-muted-foreground py-8">
+                          <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                          <p>No messages yet. Start the conversation!</p>
+                        </div>
+                      ) : (
+                        messages.map((msg) => {
+                          const isOwnMessage = msg.senderId === user.uid;
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`flex ${isOwnMessage ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`max-w-[70%] rounded-2xl px-4 py-2 ${
+                                  isOwnMessage
+                                    ? "bg-primary text-primary-foreground rounded-br-sm"
+                                    : "bg-muted text-foreground rounded-bl-sm"
+                                }`}
+                              >
+                                {!isOwnMessage && (
+                                  <p className="text-xs font-medium mb-1 opacity-70">
+                                    {msg.senderName}
+                                  </p>
+                                )}
+                                <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                                <p className={`text-xs mt-1 ${
+                                  isOwnMessage ? "text-primary-foreground/60" : "text-muted-foreground"
+                                }`}>
+                                  {msg.timestamp && format(new Date(msg.timestamp), "h:mm a")}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
                   </ScrollArea>
-                </div>
+
+                  {/* Message Input */}
+                  <div className="p-4 border-t border-border">
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Type a message..."
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        className="flex-1 bg-background"
+                        disabled={sending}
+                      />
+                      <Button
+                        onClick={handleSendMessage}
+                        disabled={!newMessage.trim() || sending}
+                        className="bg-primary hover:bg-primary/90"
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div className="h-full flex items-center justify-center text-muted-foreground">
                   <div className="text-center">
-                    <MailOpen className="w-16 h-16 mx-auto mb-4 opacity-30" />
-                    <p>Select a message to read</p>
+                    <MessageCircle className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                    <p>Select a conversation to start chatting</p>
                   </div>
                 </div>
               )}
