@@ -51,6 +51,7 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
     setIsSubmitting(true);
 
     try {
+      console.log("Submitting contact request for user:", user.uid);
       await submitContactRequest({
         userId: user.uid,
         email: user.email || "",
@@ -60,6 +61,7 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
         message: message.trim(),
       });
 
+      console.log("Contact request submitted successfully");
       setIsSuccess(true);
       toast.success("Request submitted successfully! We'll call you back soon.");
       
@@ -72,7 +74,14 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
       }, 2500);
     } catch (error: unknown) {
       console.error("Error submitting request:", error);
-      toast.error("Failed to submit request. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      
+      // Check for permission denied errors
+      if (errorMessage.includes("PERMISSION_DENIED") || errorMessage.includes("permission")) {
+        toast.error("Database permission error. Please contact support.");
+      } else {
+        toast.error("Failed to submit request. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
