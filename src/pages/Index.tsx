@@ -39,7 +39,7 @@ const Index = () => {
         <link rel="canonical" href="https://codefyre.com" />
       </Helmet>
 
-      <main className="min-h-screen bg-background">
+      <main className="min-h-screen bg-background overflow-x-hidden">
         <Navbar />
         <HeroSection onStartProject={handleStartProject} />
         <TrustSection />
