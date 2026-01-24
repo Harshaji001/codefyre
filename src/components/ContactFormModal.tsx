@@ -11,9 +11,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { submitContactRequest } from "@/lib/firebase";
 import { toast } from "sonner";
-import { Loader2, Send, CheckCircle } from "lucide-react";
+import { Loader2, Phone, CheckCircle } from "lucide-react";
 
 interface ContactFormModalProps {
   isOpen: boolean;
@@ -23,6 +23,7 @@ interface ContactFormModalProps {
 const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
   const { user } = useFirebaseAuth();
   const [subject, setSubject] = useState("");
+  const [phone, setPhone] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -31,40 +32,47 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
     e.preventDefault();
 
     if (!user) {
-      toast.error("Please sign in to send a message");
+      toast.error("Please sign in to send a request");
       return;
     }
 
-    if (!subject.trim() || !message.trim()) {
+    if (!subject.trim() || !message.trim() || !phone.trim()) {
       toast.error("Please fill in all fields");
+      return;
+    }
+
+    // Basic phone validation
+    const phoneRegex = /^[+]?[\d\s-()]{8,}$/;
+    if (!phoneRegex.test(phone.trim())) {
+      toast.error("Please enter a valid phone number");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from("contact_messages").insert({
-        sender_id: user.uid,
-        sender_email: user.email || "",
-        sender_name: user.displayName || "",
+      await submitContactRequest({
+        userId: user.uid,
+        email: user.email || "",
+        name: user.displayName || "",
+        phone: phone.trim(),
         subject: subject.trim(),
         message: message.trim(),
       });
 
-      if (error) throw error;
-
       setIsSuccess(true);
-      toast.success("Message sent successfully!");
+      toast.success("Request submitted successfully! We'll call you back soon.");
       
       setTimeout(() => {
         setSubject("");
+        setPhone("");
         setMessage("");
         setIsSuccess(false);
         onClose();
-      }, 2000);
-    } catch (error: any) {
-      console.error("Error sending message:", error);
-      toast.error("Failed to send message. Please try again.");
+      }, 2500);
+    } catch (error: unknown) {
+      console.error("Error submitting request:", error);
+      toast.error("Failed to submit request. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -73,6 +81,7 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
   const handleClose = () => {
     if (!isSubmitting) {
       setSubject("");
+      setPhone("");
       setMessage("");
       setIsSuccess(false);
       onClose();
@@ -85,16 +94,16 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
         <DialogHeader>
           <DialogTitle className="text-foreground">Contact Us</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Send us a message about your project. We'll get back to you as soon as possible.
+            Fill out the form below and we'll get back to you as soon as possible.
           </DialogDescription>
         </DialogHeader>
 
         {isSuccess ? (
           <div className="flex flex-col items-center justify-center py-8 gap-4">
             <CheckCircle className="w-16 h-16 text-primary animate-scale-in" />
-            <p className="text-foreground font-medium">Message Sent!</p>
+            <p className="text-foreground font-medium">Request Submitted!</p>
             <p className="text-muted-foreground text-sm text-center">
-              We'll review your message and get back to you soon.
+              We'll review your request and call you back soon.
             </p>
           </div>
         ) : (
@@ -128,6 +137,21 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="phone" className="text-foreground">
+                Phone Number
+              </Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="e.g., +91 98765 43210"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={isSubmitting}
+                className="bg-input text-foreground border-border placeholder:text-muted-foreground"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="message" className="text-foreground">
                 Message
               </Label>
@@ -137,7 +161,7 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 disabled={isSubmitting}
-                rows={5}
+                rows={4}
                 className="bg-input text-foreground border-border placeholder:text-muted-foreground resize-none"
               />
             </div>
@@ -150,12 +174,12 @@ const ContactFormModal = ({ isOpen, onClose }: ContactFormModalProps) => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
+                  Submitting...
                 </>
               ) : (
                 <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Send Message
+                  <Phone className="mr-2 h-4 w-4" />
+                  Request a Call Back
                 </>
               )}
             </Button>

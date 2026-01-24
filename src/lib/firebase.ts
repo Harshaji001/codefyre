@@ -138,3 +138,70 @@ export const markMessagesAsRead = async (chatId: string, userId: string) => {
     });
   }, { onlyOnce: true });
 };
+
+// Admin emails that have special access
+export const ADMIN_EMAILS = [
+  'harsha.cpr001@gmail.com',
+  'admin@gmail.com'
+];
+
+export const isAdminEmail = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  return ADMIN_EMAILS.includes(email.toLowerCase());
+};
+
+// Contact/Callback Requests
+export const contactRequestsRef = ref(database, 'contactRequests');
+
+export interface ContactRequest {
+  id?: string;
+  userId: string;
+  email: string;
+  name: string;
+  phone: string;
+  subject: string;
+  message: string;
+  status: 'pending' | 'contacted' | 'resolved';
+  createdAt: object | number;
+}
+
+export const submitContactRequest = async (request: Omit<ContactRequest, 'id' | 'status' | 'createdAt'>) => {
+  const newRequestRef = push(ref(database, 'contactRequests'));
+  await set(newRequestRef, {
+    ...request,
+    status: 'pending',
+    createdAt: serverTimestamp()
+  });
+  return newRequestRef.key;
+};
+
+export const subscribeToContactRequests = (callback: (requests: ContactRequest[]) => void) => {
+  const requestsRef = query(
+    ref(database, 'contactRequests'),
+    orderByChild('createdAt')
+  );
+  
+  onValue(requestsRef, (snapshot) => {
+    const requests: ContactRequest[] = [];
+    snapshot.forEach((child) => {
+      requests.push({
+        id: child.key,
+        ...child.val()
+      });
+    });
+    // Sort by most recent first
+    requests.sort((a, b) => {
+      const timeA = typeof a.createdAt === 'number' ? a.createdAt : 0;
+      const timeB = typeof b.createdAt === 'number' ? b.createdAt : 0;
+      return timeB - timeA;
+    });
+    callback(requests);
+  });
+  
+  return () => off(requestsRef);
+};
+
+export const updateRequestStatus = async (requestId: string, status: ContactRequest['status']) => {
+  const requestRef = ref(database, `contactRequests/${requestId}/status`);
+  await set(requestRef, status);
+};
